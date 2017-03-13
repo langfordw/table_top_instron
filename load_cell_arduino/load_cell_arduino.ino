@@ -2,6 +2,7 @@
 
 const uint8_t READ_SENSOR = 1;
 const uint8_t ZERO = 2;
+const uint8_t WAITING = 3;
 uint8_t STATE = READ_SENSOR;
 
 uint8_t data_pin = 11; // --> PB7
@@ -60,6 +61,9 @@ void zeroADS1231() {
   if (DEBUG) {
     Serial.print("#zero balance: ");
     Serial.println(zero_balance);
+    Serial1.print("#zero balance: ");
+    Serial1.print(zero_balance);
+    Serial1.print('\n');
   }
  
   EEPROM.put(eeAddress, zero_balance);
@@ -96,6 +100,25 @@ void loop() {
     if (inByte == 'z') {
       STATE = ZERO;
       if (DEBUG) { Serial.println("#zeroing"); }
+    } else if (inByte == 'g') {
+      if (STATE == WAITING) {
+        STATE = READ_SENSOR;
+      }
+    }
+  }
+
+  if (Serial1.available()) {
+    char inByte = Serial1.read();
+    if (inByte == 'z') {
+      STATE = ZERO;
+      if (DEBUG) { 
+        Serial1.print("#zeroing");
+        Serial1.print('\n'); 
+      }
+    } else if (inByte == 'g') {
+      if (STATE == WAITING) {
+        STATE = READ_SENSOR;
+      }
     }
   }
 
@@ -120,6 +143,9 @@ void loop() {
     Serial1.print('\n');
   } else if (STATE == ZERO) {
     zeroADS1231();
+//    STATE = WAITING;
     STATE = READ_SENSOR;
+  } else if (STATE == WAITING) {
+    // do nothing
   }
 }

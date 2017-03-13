@@ -36,7 +36,7 @@ const float multiplier = acceleration/(timer_freq*timer_freq);
 float step_delay = initial_step_delay;
 const int epsilon = 1;
 
-const bool DEBUG = false;
+const bool DEBUG = true;
 
 String inputString = "";         // a string to hold incoming data
 volatile boolean stringComplete = false;  // whether the string is complete
@@ -124,24 +124,30 @@ void setup() {
   TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
 
   // default arduino is 8 databits, no parity, 1 stopbit
-  UCSR1B = (1 << RXEN1);   // Turn on the reception circuitry
+  UCSR1B = (1 << RXEN1) | (1 << TXEN1);   // Turn on the reception circuitry
   UCSR1C = (1 << UCSZ10) | (1 << UCSZ11); // Use 8-bit character sizes
 
   UBRR1H = (BAUD_PRESCALE >> 8); // Load upper 8-bits of the baud rate value into the high byte of the UBRR register
   UBRR1L = BAUD_PRESCALE; // Load lower 8-bits of the baud rate value into the low byte of the UBRR register
 
-  UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
+//  UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
 
   interrupts();             // enable all interrupts
 
   last_time = millis();
   inputString.reserve(200);
-  STEPPER_STATE = STOPPED;
+  STEPPER_STATE = DONE;
   current_position = 0;
 
   while (!Serial) {
     ;
   }
+  Serial.println("#User Controls:");
+  Serial.println("#x --> stop");
+  Serial.println("#g --> start (go)");
+  Serial.println("#r --> resume");
+  Serial.println("#z --> go to zero");
+  Serial.println("#l --> zero load cell");
 }
 
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
@@ -206,6 +212,12 @@ void loop() {
         index = 0;
         UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
       }
+    } else if (inByte == 'l') {
+      if(DEBUG) { Serial.println("#user interrupt --> zeroing load cell"); }
+      while ((UCSR1A & (1 << UDRE1)) == 0) {}; // Do nothing until UDR is ready for more data to be written to it
+      UDR1 = 'z'; // Echo back the received byte back to the computer
+      while ((UCSR1A & (1 << RXC1)) == 0) {}; // Do nothing until data have been received and is ready to be read from UDR
+      Serial.println(UDR1); // Fetch the received byte value into the variable "ByteReceived"
     }
   }
   
