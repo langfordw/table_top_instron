@@ -35,6 +35,7 @@ const float slew_step_delay = timer_freq/slew_speed;
 const float multiplier = acceleration/(timer_freq*timer_freq);
 float step_delay = initial_step_delay;
 const int epsilon = 1;
+bool motor_enabled = false;
 
 const bool DEBUG = true;
 
@@ -99,6 +100,7 @@ void setup() {
   pinMode(enable_pin, OUTPUT);
   
   digitalWrite(enable_pin, LOW);
+  motor_enabled = true;
   digitalWrite(dir_pin, HIGH);
 
   if (DEBUG) {
@@ -147,7 +149,9 @@ void setup() {
   Serial.println("#g --> start (go)");
   Serial.println("#r --> resume");
   Serial.println("#z --> go to zero");
-  Serial.println("#l --> zero load cell");
+  Serial.println("#e --> enable motor");
+  Serial.println("#d --> disable motor");
+//  Serial.println("#l --> zero load cell");
 }
 
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
@@ -191,6 +195,8 @@ void loop() {
   // r = resume
   // z = go to zero
   // g = go again
+  // e = enable motor
+  // d = disable motor
   if (Serial.available()) {
     char inByte = Serial.read();
     if (inByte == 'x') {
@@ -199,15 +205,31 @@ void loop() {
       if(DEBUG) { Serial.println("#user interrupt --> done (stop!)"); }
     } else if (inByte == 'z') {
       if(DEBUG) { Serial.println("#user interrupt --> stopped (go to zero)"); }
+      if (!motor_enabled) {
+        if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
+        digitalWrite(enable_pin, LOW);
+        motor_enabled = true;
+      }
       STEPPER_STATE = STOPPED;
       index = 1;
     } else if (inByte == 'r') {
       if(DEBUG) { Serial.println("#user interrupt --> resume"); }
+      if (!motor_enabled) {
+        if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
+        digitalWrite(enable_pin, LOW);
+        motor_enabled = true;
+      }
       STEPPER_STATE = LAST_STEPPER_STATE;
       UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
     } else if (inByte == 'g') {
       if(DEBUG) { Serial.println("#user interrupt --> stopped (go again)"); }
+      
       if (STEPPER_STATE == DONE) {
+        if (!motor_enabled) {
+          if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
+          digitalWrite(enable_pin, LOW);
+          motor_enabled = true;
+        }
         STEPPER_STATE = STOPPED;
         index = 0;
         UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
@@ -218,6 +240,14 @@ void loop() {
       UDR1 = 'z'; // Echo back the received byte back to the computer
       while ((UCSR1A & (1 << RXC1)) == 0) {}; // Do nothing until data have been received and is ready to be read from UDR
       Serial.println(UDR1); // Fetch the received byte value into the variable "ByteReceived"
+    } else if (inByte == 'e') {
+      if(DEBUG) { Serial.println("#user interrupt --> enable motor"); }
+      digitalWrite(enable_pin, LOW);
+      motor_enabled = true;
+    } else if (inByte == 'd') {
+      if(DEBUG) { Serial.println("#user interrupt --> disable motor"); }
+      digitalWrite(enable_pin, HIGH);
+      motor_enabled = false;
     }
   }
   
