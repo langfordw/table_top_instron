@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -19,22 +19,29 @@
 </head>
 <body>
 
-<div>
-    Current Port: <span id="portName"></span><br/>
-    Available Ports: <span id="availablePorts"></span><br/>
-    <a id="refreshPorts" href="#">Refresh Ports</a><br/>
-    BaudRate: <span id="baudRate"></span><br/>
-    Data: <span id="dataDisplay"></span><br/>
+<h2>Javascript Serial Monitor</h2>
+
+<div class="list">
+    Available Ports:  <a id="refreshPorts" href="#">refresh</a><br/>
+    <span id="availablePorts"></span>
 </div>
 
-
-<div class="scrollDiv">
-<h2>Node1:</h2>
-<span id="serialMonitor" class="scroll"></span>
+<div class="list">
+    BaudRate:
+    <select id="baudSelect">
+    <option selected>115200</option>
+    <option>9600</option>
+    </select>
 </div>
-<div class="scrollDiv">
-<h2>Node2:</h2>
-<span id="serialMonitor2" class="scroll"></span>
+
+Status:&nbsp;<span id="statusMsg" class="warn"></span><br/>
+<br>
+
+<div class="scroll">
+	<input type="text" id="serialInput"></input><button id="sendButton">Send</button>
+	<input type="checkbox" id="newLineCheck">NL</input>&nbsp;<input type="checkbox" id="carriageReturnCheck">CR</input><br>
+	<input checked id="autoscroll" type="checkbox">autoscroll</input><br/>
+	<span id="serialMonitor" class="scroll"></span><br><br>
 </div>
 
 </body>

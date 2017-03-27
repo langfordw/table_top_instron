@@ -21,6 +21,7 @@ io.on('connection', function(socket){
     });
 
     socket.on('baudRate', function(value){
+        console.log(value)
         refreshAvailablePorts(function(){
             if (!checkThatPortExists(portName)) return;
             currentPort = changePort(portName, value);

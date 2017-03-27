@@ -3,16 +3,62 @@
  */
 
 
+
 $(function() {
 
     var socket = io.connect('http://localhost:8080');
-    var serialMonitor = document.getElementById("serialMonitor");
-    var serialMonitor2 = document.getElementById("serialMonitor2");
+    var serialMonitor = $("#serialMonitor");
     var stringBuffer1 = new Array(100);
+    var serialInput = $("#serialInput");
 
-    $("#refreshPorts").click(function(e){
+    serialInput.keydown(function(e) {
+        if (e.keyCode == 13) {
+            $("#sendButton").click();
+         }
+    })
+
+    $("#baudSelect").change(function() {
+        var baud = $("#baudSelect option:selected")[0].innerText;
+        socket.emit("baudRate", parseInt(baud));
+
+    });
+
+    $("#refreshPorts").click(function(e) {
         e.preventDefault();
         socket.emit("refreshPorts");
+    });
+
+    $("#goButton").click(function() {
+        console.log("sending go");
+        socket.emit('dataOut','g');
+    });
+
+    $("#stopButton").click(function() {
+        console.log("sending stop");
+        socket.emit('dataOut','x');
+    });
+
+    $("#resumeButton").click(function() {
+        console.log("sending resume");
+        socket.emit('dataOut','r');
+    });
+
+    $("#sendButton").click(function() {
+        var text = serialInput.val();
+        if ($("#newLineCheck").is(":checked")) {
+            text += "\n";
+        }
+        if ($("#carriageReturnCheck").is(":checked")) {
+            text += "\r";
+        } 
+        console.log("sending: " + text);
+        socket.emit('dataOut',text);
+        serialInput.val("");
+    });
+
+    $("#availablePorts").change(function(){//change port
+        var port = $("select option:selected")[0].innerText;
+        socket.emit("portName", port);
     });
 
     //bind events
@@ -20,28 +66,31 @@ $(function() {
 
         console.log("connected");
 
-        if (data.portName) $("#portName").html(data.portName);
         if (data.baudRate) $("#baudRate").html(data.baudRate);
         if (data.availablePorts && data.availablePorts.length>0){
-            var html = "";
+            var html = "<select class='availablePorts'>";
             for (var i=0;i<data.availablePorts.length;i++){
-                html += "<a class='availablePorts' href='#'>" + data.availablePorts[i] + "</a><br/>"
+                html += "<option value='"+data.availablePorts[i]+"'>" + data.availablePorts[i] + "</option>"
             }
+            html+="</select>"
             $("#availablePorts").html(html);
-        }
-
-        $(".availablePorts").click(function(e){//change port
-            e.preventDefault();
-            socket.emit("portName", $(e.target).html());
-        });
+        } 
+        // set dropdown to selected port:
+        $("#availablePorts option[value='"+data.portName+"']").attr("selected", "selected");
     });
 
     socket.on('portConnected', function(data){
         console.log("connected port " + data.portName + " at " + data.baudRate);
+        $("#statusMsg").html("connected port " + data.portName + " at " + data.baudRate);
+        $("#statusMsg").addClass("success");
+        $("#statusMsg").removeClass("warn");
     });
 
     socket.on('portDisconnected', function(data){
         console.log("disconnected port " + data.portName + " at " + data.baudRate);
+        $("#statusMsg").html("disconnected port " + data.portName + " at " + data.baudRate);
+        $("#statusMsg").removeClass("success");
+        $("#statusMsg").addClass("warn");
     });
 
     socket.on("errorMsg", function(data){
@@ -54,24 +103,19 @@ $(function() {
 
     socket.on("connect_error", function(){
         console.log("connect error");
+        $("#statusMsg").html("connect error");
+        $("#statusMsg").removeClass("success");
+        $("#statusMsg").addClass("warn");
     });
 
     socket.on("dataIn", function(data){//oncoming serial data
-        console.log(data)
-        // split_data = data.split(" ");
-        // console.log(split_data)
-        // if (data[0] != "#") {
-        // // console.log("data: " + data);
-        //     // $("#dataDisplay").html(split_data[3]);
-        //     stringBuffer1.pop();
-        //     stringBuffer1.unshift(split_data[3] + " " + split_data[5] + "<br>");
-        //     console.log(stringBuffer1)
-        //     // stringBuffer1.pop();
-        //     serialMonitor.innerHTML = stringBuffer1;
-        //     // dataStream.append(new Date().getTime(), split_data[3].split(",")[0]);
-        // } else if (split_data[0] == "N2") {
-        //     // serialMonitor2.innerHTML = split_data[3] + "<br>" + serialMonitor2.innerHTML;
-        // }
+        console.log(data);
+        stringBuffer1.push(data);
+        stringBuffer1.push("</br>");
+        serialMonitor.html(stringBuffer1);
+        if ($("#autoscroll").is(':checked')) {
+            serialMonitor[0].scrollTop = serialMonitor[0].scrollHeight;
+        }
     });
 
 });
