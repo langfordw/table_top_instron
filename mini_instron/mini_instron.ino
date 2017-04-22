@@ -10,6 +10,7 @@ const uint8_t ACCEL = 2;
 const uint8_t DECCEL = 3;
 const uint8_t STOPPED = 4;
 const uint8_t DONE = 5;
+const uint8_t STOPPING = 6;
 volatile uint8_t STEPPER_STATE = STOPPED;
 uint8_t LAST_STEPPER_STATE = STEPPER_STATE;
 
@@ -26,7 +27,7 @@ uint8_t enable_pin = 10;
 //const float slew_speed = 50.0;
 //const float acceleration = 0.25;
 const float base_speed = 0.0001;
-const float slew_speed = 0.5;
+const float slew_speed = 0.25;
 const float acceleration = 0.001;
 const unsigned long timer_freq = 256;
 const float accel_dist = (slew_speed*slew_speed - base_speed*base_speed)/(2*acceleration);
@@ -44,7 +45,7 @@ volatile boolean stringComplete = false;  // whether the string is complete
 
 unsigned long last_time;
 
-long positions[] = {16000, 0};
+long positions[] = {-16000, 0};
 int index = 0;
 
 int dir = 1;
@@ -138,7 +139,7 @@ void setup() {
 
   last_time = millis();
   inputString.reserve(200);
-  STEPPER_STATE = DONE;
+  STEPPER_STATE = STOPPING;
   current_position = 0;
 
   while (!Serial) {
@@ -151,6 +152,8 @@ void setup() {
   Serial.println("#z --> go to zero");
   Serial.println("#e --> enable motor");
   Serial.println("#d --> disable motor");
+  Serial.println("#s --> stream load cell data");
+  Serial.println("#t --> stop load cell data");
 //  Serial.println("#l --> zero load cell");
 }
 
@@ -201,7 +204,7 @@ void loop() {
     char inByte = Serial.read();
     if (inByte == 'x') {
       LAST_STEPPER_STATE = STEPPER_STATE;
-      STEPPER_STATE = DONE;
+      STEPPER_STATE = STOPPING;
       if(DEBUG) { Serial.println("#user interrupt --> done (stop!)"); }
     } else if (inByte == 'z') {
       if(DEBUG) { Serial.println("#user interrupt --> stopped (go to zero)"); }
@@ -236,10 +239,11 @@ void loop() {
       }
     } else if (inByte == 'l') {
       if(DEBUG) { Serial.println("#user interrupt --> zeroing load cell"); }
-      while ((UCSR1A & (1 << UDRE1)) == 0) {}; // Do nothing until UDR is ready for more data to be written to it
-      UDR1 = 'z'; // Echo back the received byte back to the computer
-      while ((UCSR1A & (1 << RXC1)) == 0) {}; // Do nothing until data have been received and is ready to be read from UDR
-      Serial.println(UDR1); // Fetch the received byte value into the variable "ByteReceived"
+      Serial.write('z');
+//      while ((UCSR1A & (1 << UDRE1)) == 0) {}; // Do nothing until UDR is ready for more data to be written to it
+//      UDR1 = 'z'; // Echo back the received byte back to the computer
+//      while ((UCSR1A & (1 << RXC1)) == 0) {}; // Do nothing until data have been received and is ready to be read from UDR
+//      Serial.println(UDR1); // Fetch the received byte value into the variable "ByteReceived"
     } else if (inByte == 'e') {
       if(DEBUG) { Serial.println("#user interrupt --> enable motor"); }
       digitalWrite(enable_pin, LOW);
@@ -248,6 +252,12 @@ void loop() {
       if(DEBUG) { Serial.println("#user interrupt --> disable motor"); }
       digitalWrite(enable_pin, HIGH);
       motor_enabled = false;
+    } else if (inByte == 's') {
+      if (DEBUG) { Serial.println("#user interrupt --> stream load cell data"); }
+      UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
+    } else if (inByte == 't') {
+      if (DEBUG) { Serial.println("#user interrupt --> stop load cell data"); }
+      UCSR1B &= ~(1 << RXCIE1); // disable the USART Recieve Complete interrupt (USART_RXC)
     }
   }
   
@@ -271,7 +281,7 @@ void loop() {
         if(DEBUG) { Serial.println("#stopped --> new position"); }
         STEPPER_STATE = ACCEL;
       } else {
-        STEPPER_STATE = DONE;
+        STEPPER_STATE = STOPPING;
         if(DEBUG) { Serial.println("#stopped --> done"); }
       }
       break;
@@ -295,9 +305,12 @@ void loop() {
         if(DEBUG) { Serial.println("#deccel --> stopped"); }
       }
       break;
+    case STOPPING:
+      UCSR1B &= ~(1 << RXCIE1); // disable the USART Recieve Complete interrupt (USART_RXC)
+      STEPPER_STATE = DONE;
+      break;
     case DONE:
       // do nothing
-      UCSR1B &= ~(1 << RXCIE1); // disable the USART Recieve Complete interrupt (USART_RXC)
       break;
   }
 }

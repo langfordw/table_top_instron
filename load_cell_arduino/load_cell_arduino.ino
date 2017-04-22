@@ -109,6 +109,8 @@ void loop() {
 
   if (Serial1.available()) {
     char inByte = Serial1.read();
+    Serial.print("got: ");
+    Serial.println(inByte);
     if (inByte == 'z') {
       STATE = ZERO;
       if (DEBUG) { 

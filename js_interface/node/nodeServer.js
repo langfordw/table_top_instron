@@ -43,7 +43,7 @@ io.on('connection', function(socket){
 
     function outputData(data){
         io.emit('dataSent', data);
-        data += '\n';
+        // data += '\n';
         console.log("Sending data: " + data);
         currentPort.write(new Buffer(data), function(err, res) {
             if (err) onPortError(err);
@@ -69,9 +69,6 @@ io.on('connection', function(socket){
         }
         return true;
     }
-
-
-
 
     function refreshAvailablePorts(callback){
         var _allPorts = [];
