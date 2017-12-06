@@ -2,7 +2,7 @@
  * Created by aghassaei on 6/17/15.
  */
 
-var SerialPort = require('SerialPort');
+var SerialPort = require('SerialPort-v4');
 
 var app = require('http').createServer();
 var io = require('socket.io')(app);
@@ -98,7 +98,7 @@ io.on('connection', function(socket){
         console.log("initing port " + _portName + " at " + _baudRate);
         var port = new SerialPort(_portName, {
             baudRate: _baudRate,
-            parser: new SerialPort.parsers.Readline("\n"),
+            parser: new SerialPort.parsers.readline("\n"),
             autoOpen: false
         //       parser: SerialPort.parsers.raw
         });
@@ -127,7 +127,7 @@ io.on('connection', function(socket){
             var oldBaud = baudRate;
             var oldName = portName;
             console.log("disconnecting port " + oldName + " at " + oldBaud);
-            if (currentPort.isOpen) currentPort.close(function(error){
+            if (currentPort.isOpen()) currentPort.close(function(error){
                 if (error) {
                     onPortError(error);
                     return null;
