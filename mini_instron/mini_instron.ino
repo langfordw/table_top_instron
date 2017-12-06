@@ -11,6 +11,11 @@ const uint8_t DECCEL = 3;
 const uint8_t STOPPED = 4;
 const uint8_t DONE = 5;
 const uint8_t STOPPING = 6;
+
+const uint8_t STANDARD = 1;
+const uint8_t CONFIGURATION = 2;
+
+volatile uint8_t SERIAL_STATE = STANDARD;
 volatile uint8_t STEPPER_STATE = STOPPED;
 uint8_t LAST_STEPPER_STATE = STEPPER_STATE;
 
@@ -26,15 +31,11 @@ uint8_t enable_pin = 10;
 //const float base_speed = 0.1;
 //const float slew_speed = 50.0;
 //const float acceleration = 0.25;
-const float base_speed = 0.0001;
-const float slew_speed = 0.25;
-const float acceleration = 0.001;
+//float base_speed = 0.0001;
+//float slew_speed = 0.25;
+//float acceleration = 0.001;
+float accel_dist, initial_step_delay, slew_step_delay, multiplier, step_delay;
 const unsigned long timer_freq = 256;
-const float accel_dist = (slew_speed*slew_speed - base_speed*base_speed)/(2*acceleration);
-const float initial_step_delay = timer_freq/sqrt(base_speed*base_speed+2*acceleration);
-const float slew_step_delay = timer_freq/slew_speed;
-const float multiplier = acceleration/(timer_freq*timer_freq);
-float step_delay = initial_step_delay;
 const int epsilon = 1;
 bool motor_enabled = false;
 
@@ -45,10 +46,25 @@ volatile boolean stringComplete = false;  // whether the string is complete
 
 unsigned long last_time;
 
-long positions[] = {-16000, 0};
+float travel = 0.5;
+long positions[2] = {0, 0};
 int index = 0;
 
 int dir = 1;
+
+struct param {
+  float val; 
+  char id; 
+  String desc;
+};
+
+param travelParam = {0.5, 't', "Travel Distance"}; 
+param baseSpeedParam = {0.0001, 'b', "Base Speed"}; 
+param slewSpeedParam = {0.25, 's', "Slew Speed"}; 
+param accelerationParam = {0.001, 'a', "Acceleration"}; 
+
+param params[] = {travelParam, baseSpeedParam, slewSpeedParam, accelerationParam};
+int nParams = 5;
 
 //float readLoadCell() {
 //  if (Serial1.available()) {
@@ -66,6 +82,25 @@ int dir = 1;
 //    }
 //  }
 //}
+
+void debug(char *fmt, ...) {
+    char tmp[128];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(tmp, 128, fmt, args);
+    va_end(args);
+    Serial.print(tmp);
+}
+
+void calculateMovementParameters() {
+  accel_dist = (slewSpeedParam.val*slewSpeedParam.val - baseSpeedParam.val*baseSpeedParam.val)/(2*accelerationParam.val);
+  initial_step_delay = timer_freq/sqrt(baseSpeedParam.val*baseSpeedParam.val+2*accelerationParam.val);
+  slew_step_delay = timer_freq/slewSpeedParam.val;
+  multiplier = accelerationParam.val/(timer_freq*timer_freq);
+  step_delay = initial_step_delay;
+  positions[0] = long(travelParam.val*5039.3700787);
+//  Serial.println(positions[0]);
+}
 
 void setDir(long vector) {
   if (vector > 0) {
@@ -92,9 +127,26 @@ void toggleStep() {
       last_time = micros();
   }
 }
+
+void printControls() {
+  Serial.println("#User Controls:");
+  Serial.println("#x --> stop");
+  Serial.println("#g --> start (go)");
+  Serial.println("#r --> resume");
+  Serial.println("#z --> go to zero");
+  Serial.println("#e --> enable motor");
+  Serial.println("#d --> disable motor");
+  Serial.println("#s --> stream load cell data");
+  Serial.println("#t --> stop load cell data");
+  Serial.println("#! --> enter setup mode");
+  Serial.println("#q --> exit setup mode");
+//  Serial.println("#l --> zero load cell");
+}
   
 void setup() {
   Serial.begin(115200);
+
+  calculateMovementParameters();
 
   pinMode(step_pin, OUTPUT);
   pinMode(dir_pin, OUTPUT);
@@ -145,16 +197,8 @@ void setup() {
   while (!Serial) {
     ;
   }
-  Serial.println("#User Controls:");
-  Serial.println("#x --> stop");
-  Serial.println("#g --> start (go)");
-  Serial.println("#r --> resume");
-  Serial.println("#z --> go to zero");
-  Serial.println("#e --> enable motor");
-  Serial.println("#d --> disable motor");
-  Serial.println("#s --> stream load cell data");
-  Serial.println("#t --> stop load cell data");
-//  Serial.println("#l --> zero load cell");
+
+  printControls();
 }
 
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
@@ -193,73 +237,156 @@ void loop() {
     stringComplete = false;
   }
 
-  // user controls
-  // x = stop
-  // r = resume
-  // z = go to zero
-  // g = go again
-  // e = enable motor
-  // d = disable motor
-  if (Serial.available()) {
-    char inByte = Serial.read();
-    if (inByte == 'x') {
-      LAST_STEPPER_STATE = STEPPER_STATE;
-      STEPPER_STATE = STOPPING;
-      if(DEBUG) { Serial.println("#user interrupt --> done (stop!)"); }
-    } else if (inByte == 'z') {
-      if(DEBUG) { Serial.println("#user interrupt --> stopped (go to zero)"); }
-      if (!motor_enabled) {
-        if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
-        digitalWrite(enable_pin, LOW);
-        motor_enabled = true;
-      }
-      STEPPER_STATE = STOPPED;
-      index = 1;
-    } else if (inByte == 'r') {
-      if(DEBUG) { Serial.println("#user interrupt --> resume"); }
-      if (!motor_enabled) {
-        if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
-        digitalWrite(enable_pin, LOW);
-        motor_enabled = true;
-      }
-      STEPPER_STATE = LAST_STEPPER_STATE;
-      UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
-    } else if (inByte == 'g') {
-      if(DEBUG) { Serial.println("#user interrupt --> stopped (go again)"); }
-      
-      if (STEPPER_STATE == DONE) {
-        if (!motor_enabled) {
-          if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
+  switch(SERIAL_STATE) {
+    case(STANDARD):
+      // user controls
+      // x = stop
+      // r = resume
+      // z = go to zero
+      // g = go again
+      // e = enable motor
+      // d = disable motor
+      if (Serial.available()) {
+        char inByte = Serial.read();
+        if (inByte == 'x') {
+          LAST_STEPPER_STATE = STEPPER_STATE;
+          STEPPER_STATE = STOPPING;
+          if(DEBUG) { Serial.println("#user interrupt --> done (stop!)"); }
+        } else if (inByte == 'z') {
+          if(DEBUG) { Serial.println("#user interrupt --> stopped (go to zero)"); }
+          if (!motor_enabled) {
+            if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
+            digitalWrite(enable_pin, LOW);
+            motor_enabled = true;
+          }
+          STEPPER_STATE = STOPPED;
+          index = 1;
+        } else if (inByte == 'r') {
+          if(DEBUG) { Serial.println("#user interrupt --> resume"); }
+          if (!motor_enabled) {
+            if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
+            digitalWrite(enable_pin, LOW);
+            motor_enabled = true;
+          }
+          STEPPER_STATE = LAST_STEPPER_STATE;
+          UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
+        } else if (inByte == 'g') {
+          if(DEBUG) { Serial.println("#user interrupt --> stopped (go again)"); }
+          
+          if (STEPPER_STATE == DONE) {
+            if (!motor_enabled) {
+              if(DEBUG) { Serial.println("#motor was disabled, re-enabling"); }
+              digitalWrite(enable_pin, LOW);
+              motor_enabled = true;
+            }
+            STEPPER_STATE = STOPPED;
+            index = 0;
+            UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
+          }
+        } else if (inByte == 'l') {
+          if(DEBUG) { Serial.println("#user interrupt --> zeroing load cell"); }
+          Serial.write('z');
+    //      while ((UCSR1A & (1 << UDRE1)) == 0) {}; // Do nothing until UDR is ready for more data to be written to it
+    //      UDR1 = 'z'; // Echo back the received byte back to the computer
+    //      while ((UCSR1A & (1 << RXC1)) == 0) {}; // Do nothing until data have been received and is ready to be read from UDR
+    //      Serial.println(UDR1); // Fetch the received byte value into the variable "ByteReceived"
+        } else if (inByte == 'e') {
+          if(DEBUG) { Serial.println("#user interrupt --> enable motor"); }
           digitalWrite(enable_pin, LOW);
           motor_enabled = true;
+        } else if (inByte == 'd') {
+          if(DEBUG) { Serial.println("#user interrupt --> disable motor"); }
+          digitalWrite(enable_pin, HIGH);
+          motor_enabled = false;
+        } else if (inByte == 's') {
+          if (DEBUG) { Serial.println("#user interrupt --> stream load cell data"); }
+          UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
+        } else if (inByte == 't') {
+          if (DEBUG) { Serial.println("#user interrupt --> stop load cell data"); }
+          UCSR1B &= ~(1 << RXCIE1); // disable the USART Recieve Complete interrupt (USART_RXC)
+        } else if (inByte == '!') {
+          if (DEBUG) { Serial.println("#user interrupt --> enter setup mode"); }
+          // display configurable parameters
+          Serial.println("Configurable parameters:");
+          Serial.print("(t)ravel: ");
+          Serial.println(travel,4);
+//          Serial.print("[");
+//          int arrayLength = sizeof(positions)/sizeof(int);
+//          for (int k=0; k < arrayLength-1; k++) {
+//            Serial.print(positions[k]);
+//            Serial.print(", ");
+//          }
+//          Serial.print(positions[arrayLength-1]);
+//          Serial.println("]");
+
+//          Serial.print("(b)ase speed: ");
+//          Serial.println(base_speed,5);
+//          Serial.print("(s)lew speed: ");
+//          Serial.println(slew_speed,5);
+//          Serial.print("(a)cceleration: ");
+//          Serial.println(acceleration,5);
+
+          Serial.println("use syntax: 'b=0.001' to change base speed, for example");
+          SERIAL_STATE = CONFIGURATION; 
         }
-        STEPPER_STATE = STOPPED;
-        index = 0;
-        UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
       }
-    } else if (inByte == 'l') {
-      if(DEBUG) { Serial.println("#user interrupt --> zeroing load cell"); }
-      Serial.write('z');
-//      while ((UCSR1A & (1 << UDRE1)) == 0) {}; // Do nothing until UDR is ready for more data to be written to it
-//      UDR1 = 'z'; // Echo back the received byte back to the computer
-//      while ((UCSR1A & (1 << RXC1)) == 0) {}; // Do nothing until data have been received and is ready to be read from UDR
-//      Serial.println(UDR1); // Fetch the received byte value into the variable "ByteReceived"
-    } else if (inByte == 'e') {
-      if(DEBUG) { Serial.println("#user interrupt --> enable motor"); }
-      digitalWrite(enable_pin, LOW);
-      motor_enabled = true;
-    } else if (inByte == 'd') {
-      if(DEBUG) { Serial.println("#user interrupt --> disable motor"); }
-      digitalWrite(enable_pin, HIGH);
-      motor_enabled = false;
-    } else if (inByte == 's') {
-      if (DEBUG) { Serial.println("#user interrupt --> stream load cell data"); }
-      UCSR1B |= (1 << RXCIE1); // Enable the USART Recieve Complete interrupt (USART_RXC)
-    } else if (inByte == 't') {
-      if (DEBUG) { Serial.println("#user interrupt --> stop load cell data"); }
-      UCSR1B &= ~(1 << RXCIE1); // disable the USART Recieve Complete interrupt (USART_RXC)
-    }
+    
+      break;
+    case(CONFIGURATION):
+      if (Serial.available()) {
+        char inByte = Serial.read();
+        String inString;
+        while(inByte != '\n') {
+          inString += inByte;
+          inByte = Serial.read();
+        }
+//        Serial.println(inString[0]);
+
+        if (inString[0] == 'q') {
+          Serial.println("leaving setup mode");
+          printControls();
+          SERIAL_STATE = STANDARD;
+        } else {
+          for (int i=0; i < nParams; i++) {
+            if (inString[0] == params[i].id) {
+              params[i].val = inString.substring(2).toFloat();
+              debug("Updated %s to %0.5f",params[i].desc.c_str(),params[i].val);
+            }
+          }
+        }
+        
+        
+//        if (inString[0] == 'q') {
+//          Serial.println("leaving setup mode");
+//          printControls();
+//          SERIAL_STATE = STANDARD;
+//        } else if (inString[0] == 't') {
+//          // update the travel
+//          travel = inString.substring(2).toFloat();
+//          Serial.print("updated travel to ");
+//          Serial.println(travel,5);
+//        } else if (inString[0] == 'b') {
+//          // update the base speed
+//          base_speed = inString.substring(2).toFloat();
+//          Serial.print("updated base speed to ");
+//          Serial.println(base_speed,5);
+//        } else if (inString[0] == 's') {
+//          // update the slew speed
+//          base_speed = inString.substring(2).toFloat();
+//          Serial.print("updated slew speed to ");
+//          Serial.println(base_speed,5);
+//        } else if (inString[0] == 'a') {
+//          // update the acceleration
+//          acceleration = inString.substring(2).toFloat();
+//          Serial.print("updated acceleration to ");
+//          Serial.println(acceleration,5);
+//        }
+        calculateMovementParameters();
+      }
+      
+      break;
   }
+ 
   
   switch(STEPPER_STATE) {
     case STEADY:
@@ -314,4 +441,5 @@ void loop() {
       break;
   }
 }
+
 

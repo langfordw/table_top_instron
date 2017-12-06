@@ -43,7 +43,7 @@ io.on('connection', function(socket){
 
     function outputData(data){
         io.emit('dataSent', data);
-        // data += '\n';
+        data += '\n';
         console.log("Sending data: " + data);
         currentPort.write(new Buffer(data), function(err, res) {
             if (err) onPortError(err);
@@ -70,6 +70,9 @@ io.on('connection', function(socket){
         return true;
     }
 
+
+
+
     function refreshAvailablePorts(callback){
         var _allPorts = [];
         SerialPort.list(function(err, ports){
@@ -95,7 +98,7 @@ io.on('connection', function(socket){
         console.log("initing port " + _portName + " at " + _baudRate);
         var port = new SerialPort(_portName, {
             baudRate: _baudRate,
-            parser: SerialPort.parsers.readline("\n"),
+            parser: new SerialPort.parsers.Readline("\n"),
             autoOpen: false
         //       parser: SerialPort.parsers.raw
         });
@@ -124,7 +127,7 @@ io.on('connection', function(socket){
             var oldBaud = baudRate;
             var oldName = portName;
             console.log("disconnecting port " + oldName + " at " + oldBaud);
-            if (currentPort.isOpen()) currentPort.close(function(error){
+            if (currentPort.isOpen) currentPort.close(function(error){
                 if (error) {
                     onPortError(error);
                     return null;

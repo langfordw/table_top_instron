@@ -1,20 +1,22 @@
 /**
  * Created by ghassaei on 10/26/16.
  */
-
-
+var clean_data = [];
 
 $(function() {
 
     var socket = io.connect('http://localhost:8080');
     var serialMonitor = $("#serialMonitor");
-    var stringBuffer1 = new Array(100);
+    var stringBuffer = new Array();
     var serialInput = $("#serialInput");
+    
+    $("#commentCharacter").val('#');
+    $("#delimeterCharacter").val(',');
 
     serialInput.keydown(function(e) {
         if (e.keyCode == 13) {
             $("#sendButton").click();
-         }
+        }
     })
 
     $("#baudSelect").change(function() {
@@ -41,6 +43,30 @@ $(function() {
     $("#resumeButton").click(function() {
         console.log("sending resume");
         socket.emit('dataOut','r');
+    });
+    
+    $("#saveButton").click(function() {
+        console.log("saving data...");
+        console.log(serialMonitor.html())
+        var fileName = "jsm_data.txt";
+        saveData(serialMonitor.html(),fileName);
+    });
+
+    $("#clearButton").click(function() {
+        serialMonitor.html("");
+        clean_data = [];
+        chart_initialized = false;
+        Plotly.purge('chart');
+    });
+
+    $("#plotButton").click(function() {
+        var data = serialMonitor.html().split('\n');
+        if (data.length < 2) {
+            // if there's nothing in the serial monitor, use some sample data
+            console.log("using sample data")
+            data = ["1, 2, 3","3, 4, 5","5, 6, 7","7, 8, 9","9, 10, 11"];
+        }
+        drawChart(parseData(data));
     });
 
     $("#sendButton").click(function() {
@@ -109,13 +135,53 @@ $(function() {
     });
 
     socket.on("dataIn", function(data){//oncoming serial data
-        console.log(data);
-        stringBuffer1.push(data);
-        stringBuffer1.push("</br>");
-        serialMonitor.html(stringBuffer1);
+        serialMonitor.html(serialMonitor.html()+data + '\n');
+        // console.log(serialMonitor.html())
         if ($("#autoscroll").is(':checked')) {
             serialMonitor[0].scrollTop = serialMonitor[0].scrollHeight;
         }
+        if ($("#streamToPlot").is(':checked')) {
+            // var data = serialMonitor.html().split('\n');
+            // drawChart(parseData(data));
+            var dat = parseLine(data);
+            if (dat != -1) {
+                addDataToChart(dat);
+            }
+        }
     });
+
+    function parseLine(line) {
+        if (line[0] != $("#commentCharacter").val()) {
+            var xy = line.split($("#delimeterCharacter").val()).map(Number);
+            xy[0] *= 0.0001984375; //steps --> mm
+            xy[1] *= 9.81; //g --> mN
+            clean_data.push(xy);
+            return xy;
+        } else {
+            return -1;
+        }
+
+    }
+
+    function parseData(data) {
+        for (var i=0; i < data.length; i++) {
+            parseLine(data[i]);
+        }
+        return clean_data;
+    }
+
+    var saveData = (function () {
+        var a = document.createElement("a");
+        document.body.appendChild(a);
+        a.style = "display: none";
+        return function (data, fileName) {
+            var blob = new Blob([data], { type: 'text/csv;charset=utf-8;' }),
+            url = window.URL.createObjectURL(blob);
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        };
+    }());
 
 });
