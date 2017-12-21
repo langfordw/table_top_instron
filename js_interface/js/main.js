@@ -71,6 +71,17 @@ $(function() {
 
     $("#sendButton").click(function() {
         var text = serialInput.val();
+        if (text == "g") {
+            // sent "go" command, trigger recording
+            if ($("#captureVideo").is(':checked')) {
+                player.record().start();
+            }
+        } else if (text == "x") {
+            // sent "stop" command, stop recording
+            if ($("#captureVideo").is(':checked')) {
+                player.record().stop();
+            }
+        }
         if ($("#newLineCheck").is(":checked")) {
             text += "\n";
         }
@@ -158,6 +169,12 @@ $(function() {
             clean_data.push(xy);
             return xy;
         } else {
+            if (line[1] == 'E' && line[2] == 'O' && line[3] == "E") {
+                //"end of experiment", stop the recording
+                if ($("#captureVideo").is(':checked')) {
+                    player.record().stop();
+                }
+            }
             return -1;
         }
 
