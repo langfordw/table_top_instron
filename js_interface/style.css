@@ -2,8 +2,8 @@ body {
 	font-family:serif;
 }
 .scroll {
-	width:400px;
-	height:400px;
+	width:100%;
+	height:50%;
 	position: absolute;
 	resize:both;
 }
@@ -13,6 +13,18 @@ body {
 }
 
 .scroll>span {
+	overflow-y:scroll;
+	display:inline-block;
+	position: relative;
+	width:100%;
+	height:100%;
+	border: 1px;
+	border-style:solid;
+	border-color: #999;
+	color: #555;
+}
+
+.scroll>pre {
 	overflow-y:scroll;
 	display:inline-block;
 	position: relative;
@@ -48,4 +60,52 @@ h2 {
 
 .list {
 	padding-bottom: 10px;
+}
+
+.chart {
+	display:inline-block;
+	width:60%;
+	position:absolute;
+	left:35%;
+	margin-left:30px;
+	height:90%;
+}
+
+#chart {
+	position:absolute;
+	height:50%;
+	width:100%;
+	margin-top:-30px;
+}
+
+.video {
+	/*display:inline-block;*/
+	width:70%;
+/*	height:50%;
+	position:absolute;
+	left:35%;
+	top:50%;
+	/*margin-left:30px;*/
+}
+
+.videoContainer {
+	display:inline-block;
+	width:100%;
+	height:50%;
+	position:absolute;
+	/*left:35%;*/
+	top:50%;
+	/*margin-left:30px;*/
+}
+
+.container {
+	display:inline-block;
+	width:	35%;
+	height: 100%;
+	position:absolute;
+}
+
+#parser {
+	margin-left:10%;
+	display:inline-block;
 }
