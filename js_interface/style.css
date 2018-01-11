@@ -107,5 +107,6 @@ h2 {
 
 #parser {
 	margin-left:10%;
-	display:inline-block;
+	/*display:inline-block;*/
+	display:none;
 }

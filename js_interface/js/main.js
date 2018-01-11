@@ -73,6 +73,7 @@ $(function() {
         var text = serialInput.val();
         if (text == "g") {
             // sent "go" command, trigger recording
+            console.log("sent go, start recording");
             if ($("#captureVideo").is(':checked')) {
                 player.record().start();
             }

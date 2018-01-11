@@ -70,7 +70,7 @@ player.on('finishRecord', function() {
     // the blob object contains the recorded data that
     // can be downloaded by the user, stored on server etc.
     console.log('finished recording: ', player.recordedData);
-    player.record().saveAs({'video': 'my-video-file-name.mp4'});
+    player.record().saveAs({'video': 'my-video-file-name.webm'});
     // player.record().saveAs({'image':'myImage.jpg'})
     // zip.file("image1.jpg",player.recordedData,{binary: true})
 });
