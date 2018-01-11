@@ -63,8 +63,11 @@ param baseSpeedParam = {0.0001, 'b', "Base Speed"};
 param slewSpeedParam = {0.25, 's', "Slew Speed"}; 
 param accelerationParam = {0.001, 'a', "Acceleration"}; 
 
-param params[] = {travelParam, baseSpeedParam, slewSpeedParam, accelerationParam};
-int nParams = 5;
+const int nParams = 4;
+struct param *params[] = {&travelParam, &baseSpeedParam, &slewSpeedParam, &accelerationParam};
+//*params[0] = travelParam;// = [travelParam, baseSpeedParam, slewSpeedParam, accelerationParam];
+//params[0]= {travelParam, baseSpeedParam, slewSpeedParam, accelerationParam};
+
 
 //float readLoadCell() {
 //  if (Serial1.available()) {
@@ -146,6 +149,7 @@ void printControls() {
 void setup() {
   Serial.begin(115200);
 
+  constructJSONObject();
   calculateMovementParameters();
 
   pinMode(step_pin, OUTPUT);
@@ -251,7 +255,10 @@ void loop() {
         if (inByte == 'x') {
           LAST_STEPPER_STATE = STEPPER_STATE;
           STEPPER_STATE = STOPPING;
-          if(DEBUG) { Serial.println("#user interrupt --> done (stop!)"); }
+          if(DEBUG) { 
+             Serial.println("#user interrupt --> done (stop!)"); 
+             Serial.println("#EOE"); 
+          }
         } else if (inByte == 'z') {
           if(DEBUG) { Serial.println("#user interrupt --> stopped (go to zero)"); }
           if (!motor_enabled) {
@@ -304,33 +311,20 @@ void loop() {
         } else if (inByte == 't') {
           if (DEBUG) { Serial.println("#user interrupt --> stop load cell data"); }
           UCSR1B &= ~(1 << RXCIE1); // disable the USART Recieve Complete interrupt (USART_RXC)
+        } else if (inByte == '?') {
+          sendJSONObject();
         } else if (inByte == '!') {
           if (DEBUG) { Serial.println("#user interrupt --> enter setup mode"); }
           // display configurable parameters
-          Serial.println("Configurable parameters:");
-          Serial.print("(t)ravel: ");
-          Serial.println(travel,4);
-//          Serial.print("[");
-//          int arrayLength = sizeof(positions)/sizeof(int);
-//          for (int k=0; k < arrayLength-1; k++) {
-//            Serial.print(positions[k]);
-//            Serial.print(", ");
-//          }
-//          Serial.print(positions[arrayLength-1]);
-//          Serial.println("]");
-
-//          Serial.print("(b)ase speed: ");
-//          Serial.println(base_speed,5);
-//          Serial.print("(s)lew speed: ");
-//          Serial.println(slew_speed,5);
-//          Serial.print("(a)cceleration: ");
-//          Serial.println(acceleration,5);
-
-          Serial.println("use syntax: 'b=0.001' to change base speed, for example");
+          Serial.println("#Configurable parameters:");
+          for (int i=0; i < nParams; i++) {
+              debug("#%c: %s = ",(*params[i]).id,(*params[i]).desc.c_str());
+              Serial.println((*params[i]).val,4);  // converting float to string is nontrivial
+          }
+          Serial.println("#use syntax: 'b=0.001' to change base speed, for example");
           SERIAL_STATE = CONFIGURATION; 
         }
       }
-    
       break;
     case(CONFIGURATION):
       if (Serial.available()) {
@@ -340,48 +334,21 @@ void loop() {
           inString += inByte;
           inByte = Serial.read();
         }
-//        Serial.println(inString[0]);
-
         if (inString[0] == 'q') {
-          Serial.println("leaving setup mode");
+          Serial.println("#leaving setup mode");
           printControls();
+          calculateMovementParameters();
           SERIAL_STATE = STANDARD;
         } else {
+          // print parameters
           for (int i=0; i < nParams; i++) {
-            if (inString[0] == params[i].id) {
-              params[i].val = inString.substring(2).toFloat();
-              debug("Updated %s to %0.5f",params[i].desc.c_str(),params[i].val);
+            if (inString[0] == (*params[i]).id) {
+              params[i]->val = inString.substring(2).toFloat();
+              debug("#%s = ",(*params[i]).desc.c_str());
+              Serial.println((*params[i]).val,4); // converting float to string is nontrivial
             }
           }
         }
-        
-        
-//        if (inString[0] == 'q') {
-//          Serial.println("leaving setup mode");
-//          printControls();
-//          SERIAL_STATE = STANDARD;
-//        } else if (inString[0] == 't') {
-//          // update the travel
-//          travel = inString.substring(2).toFloat();
-//          Serial.print("updated travel to ");
-//          Serial.println(travel,5);
-//        } else if (inString[0] == 'b') {
-//          // update the base speed
-//          base_speed = inString.substring(2).toFloat();
-//          Serial.print("updated base speed to ");
-//          Serial.println(base_speed,5);
-//        } else if (inString[0] == 's') {
-//          // update the slew speed
-//          base_speed = inString.substring(2).toFloat();
-//          Serial.print("updated slew speed to ");
-//          Serial.println(base_speed,5);
-//        } else if (inString[0] == 'a') {
-//          // update the acceleration
-//          acceleration = inString.substring(2).toFloat();
-//          Serial.print("updated acceleration to ");
-//          Serial.println(acceleration,5);
-//        }
-        calculateMovementParameters();
       }
       
       break;
@@ -409,7 +376,10 @@ void loop() {
         STEPPER_STATE = ACCEL;
       } else {
         STEPPER_STATE = STOPPING;
-        if(DEBUG) { Serial.println("#stopped --> done"); }
+        if(DEBUG) { 
+          Serial.println("#stopped --> done"); 
+          Serial.println("#EOE"); 
+        }
       }
       break;
     case ACCEL:

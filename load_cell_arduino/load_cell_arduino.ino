@@ -15,9 +15,16 @@ uint8_t n_bits = 24;
 unsigned long filtered = 0;
 float alpha = 0.8;
 
-uint8_t oversample_num = 16;
+uint8_t oversample_num = 4; // should be a multiple of 4
 
 unsigned long zero_balance = 0;
+
+unsigned long raw_val;
+long val;
+float weight;
+
+unsigned long data;
+unsigned long zero;
 
 uint8_t n_calibration = 25;
 
@@ -31,7 +38,7 @@ const bool DEBUG = true;
 const int eeAddress = 0;   //Location we want the data to be put.
 
 unsigned long readADS1231() {
-  unsigned long data = 0;
+  data = 0;
   for (uint8_t i=0; i < n_bits; i++) { // bitshift data out
     // this is shifting MSB first
     PORTB ^= (1 << PB6);
@@ -46,14 +53,13 @@ unsigned long readADS1231() {
 }
 
 void zeroADS1231() {
-  unsigned long zero;
   for (uint8_t k = 0; k < n_calibration; k++) {
     unsigned long raw_val = 0;
     for (char j = 0; j < oversample_num; j++) {
       while(PINB & (1 << PB7)) { } // wait for data_pin to go low
       raw_val += readADS1231();
     }
-    raw_val = raw_val >> 2; // decimate based on oversampling
+    raw_val = raw_val >> uint8_t(oversample_num/4); // decimate based on oversampling
     zero += raw_val; // accumulate
   }
   zero_balance = zero/n_calibration;
@@ -125,17 +131,16 @@ void loop() {
   }
 
   if (STATE == READ_SENSOR) {
-    unsigned long raw_val = 0;
+    raw_val = 0;
     for (char j = 0; j < oversample_num; j++) {
       while(PINB & (1 << PB7)) { } // wait for data_pin to go low
       raw_val += readADS1231();
     }
-    raw_val = raw_val >> 2; // decimate based on oversampling
+    raw_val = raw_val >> uint8_t(oversample_num/4); // decimate based on oversampling
     filtered = alpha*raw_val + (1-alpha)*filtered; // smooth data
     
-    long val = filtered-zero_balance;
-    long raw = raw_val-zero_balance;
-    float weight = float(val/float(dx))*10;
+    val = filtered-zero_balance;
+    weight = float(val/float(dx))*10;
   
     if (DEBUG) { 
       Serial.print(weight,4); 
